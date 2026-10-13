@@ -1,0 +1,135 @@
+<!doctype html>
+<!--
+  MapLibre warm-up (scratch branch only, do not merge to main).
+
+  Goal: understand how a SOURCE, a LAYER and a CLICK HANDLER fit together.
+    1. source + layer: a georeferenced image of the Jezero box (the placeholder below)
+    2. click handler: logs latitude/longitude of every click
+    3. a line drawn between two clicks, with the distance in km on Mars
+
+  Why an image and not Mars Trek tiles: Trek's global tile layers start from a 2-column,
+  1-row grid (a geographic grid). MapLibre expects the Web Mercator grid (1 x 1 at zoom 0),
+  so those tiles cannot be added as a normal raster source.
+  Day-one imagery: export a ~2048 px PNG of the CTX photo clipped to the box (QGIS, or
+  gdal_translate -of PNG -outsize 2048 0) and set IMAGE_URL below.
+
+  Run:  python3 -m http.server 8000   then open http://localhost:8000/
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MapLibre warm-up — Jezero</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+  <style>
+    html, body, #map { margin: 0; height: 100%; background: #1a1210; }
+    #hud {
+      position: absolute; top: 12px; left: 12px; max-width: 320px; padding: 10px 12px;
+      background: rgba(20, 12, 10, 0.88); color: #f2e6df; border: 1px solid #b5431f; border-radius: 6px;
+      font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    #hud b { color: #ff9a6b; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="hud">
+    <b>Click twice</b> to draw a line. A third click starts over.<br>
+    <span id="readout">No clicks yet.</span>
+  </div>
+
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script>
+    // ---- settings -------------------------------------------------------------
+    const BOX = { west: 77.10, south: 17.95, east: 78.00, north: 18.85 }; // degrees, planetocentric
+    const IMAGE_URL = null;            // e.g. './jezero-ctx-2048.png'. null = generated placeholder
+    const MARS_RADIUS_M = 3396190;     // NOT Earth's radius
+
+    // ---- Mars distance (great circle on a sphere of Mars's radius) ------------
+    function distanceKm(a, b) {
+      const rad = Math.PI / 180;
+      const dLat = (b[1] - a[1]) * rad;
+      const dLng = (b[0] - a[0]) * rad;
+      const h = Math.sin(dLat / 2) ** 2 +
+                Math.cos(a[1] * rad) * Math.cos(b[1] * rad) * Math.sin(dLng / 2) ** 2;
+      return (2 * MARS_RADIUS_M * Math.asin(Math.sqrt(h))) / 1000;
+    }
+
+    // ---- placeholder image so the page works with no data ---------------------
+    function makePlaceholder() {
+      const size = 1024;
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = size;
+      const ctx = canvas.getContext('2d');
+      const g = ctx.createRadialGradient(size * 0.45, size * 0.5, size * 0.05, size * 0.5, size * 0.5, size * 0.7);
+      g.addColorStop(0, '#6e3a26'); g.addColorStop(1, '#2b1a14');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, size, size);
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 1;
+      for (let i = 0; i <= size; i += 128) {
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, size); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(size, i); ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = '28px monospace';
+      ctx.fillText('placeholder: set IMAGE_URL', 24, 48);
+      return canvas.toDataURL('image/png');
+    }
+
+    // ---- map ------------------------------------------------------------------
+    const emptyStyle = {
+      version: 8,
+      sources: {},
+      layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#1a1210' } }],
+    };
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: emptyStyle,
+      center: [(BOX.west + BOX.east) / 2, (BOX.south + BOX.north) / 2],
+      zoom: 9,
+    });
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    const emptyCollection = { type: 'FeatureCollection', features: [] };
+    let clicks = []; // up to two [lng, lat] points
+
+    map.on('load', () => {
+      // 1. SOURCE: where the data comes from. LAYER: how it is drawn.
+      map.addSource('jezero', {
+        type: 'image',
+        url: IMAGE_URL || makePlaceholder(),
+        coordinates: [            // top-left, top-right, bottom-right, bottom-left (lng, lat)
+          [BOX.west, BOX.north], [BOX.east, BOX.north],
+          [BOX.east, BOX.south], [BOX.west, BOX.south],
+        ],
+      });
+      map.addLayer({ id: 'jezero', type: 'raster', source: 'jezero', paint: { 'raster-opacity': 0.95 } });
+
+      // 2. Two small GeoJSON sources that we update from the click handler.
+      map.addSource('points', { type: 'geojson', data: emptyCollection });
+      map.addSource('line', { type: 'geojson', data: emptyCollection });
+      map.addLayer({ id: 'line', type: 'line', source: 'line',
+        paint: { 'line-color': '#ff7a45', 'line-width': 3 } });
+      map.addLayer({ id: 'points', type: 'circle', source: 'points',
+        paint: { 'circle-radius': 6, 'circle-color': '#ffffff', 'circle-stroke-color': '#b5431f', 'circle-stroke-width': 2 } });
+    });
+
+    // 3. CLICK HANDLER: runs every time the user clicks the map.
+    map.on('click', (e) => {
+      const point = [e.lngLat.lng, e.lngLat.lat];
+      console.log('click', { lng: point[0], lat: point[1] });
+      clicks = clicks.length >= 2 ? [point] : [...clicks, point];
+
+      map.getSource('points').setData({
+        type: 'FeatureCollection',
+        features: clicks.map((c) => ({ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: c } })),
+      });
+      map.getSource('line').setData(clicks.length === 2
+        ? { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: clicks } }
+        : emptyCollection);
+
+      const text = clicks.map((c, i) => `#${i + 1}: ${c[1].toFixed(4)} N, ${c[0].toFixed(4)} E`).join('<br>');
+      const dist = clicks.length === 2 ? `<br><b>${distanceKm(clicks[0], clicks[1]).toFixed(2)} km</b> on Mars` : '';
+      document.getElementById('readout').innerHTML = text + dist;
+    });
+  </script>
+</body>
+</html>
