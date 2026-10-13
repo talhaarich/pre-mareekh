@@ -1,0 +1,62 @@
+# ---------- OS ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---------- Editors ----------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+pipeline/.cache/
+
+# ---------- Node / web ----------
+node_modules/
+web/dist/
+web/build/
+.vite/
+.eslintcache
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Secrets ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Deploy ----------
+.vercel/
+.netlify/
+
+# ---------- Data: big files stay out of git (share by drive link) ----------
+# Keep the folders alive with an empty .gitkeep file in each.
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+*.tif
+*.tiff
+*.img
+*.jp2
+*.cub
+*.zip
+*.7z
+*.tar.gz
+
+# NOTE: web/public/data (tiles, grids, manifest.json, meda.json) IS committed.
+# GitHub rejects any single file over 100 MB. If the tiles grow too big,
+# stop committing them and host them somewhere else.
