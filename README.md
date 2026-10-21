@@ -44,6 +44,8 @@ pre-mareekh/
 │   ├── report.py                   # validation report
 │   ├── manifests/
 │   │   └── jezero.yaml             # settings file: the place and its layers
+│   ├── scripts/
+│   │   └── download_jezero_data.bat  # Windows + OSGeo4W: downloads every source layer into data/raw/
 │   ├── steps/
 │   │   ├── normalise.py            # clip + reproject to a local metric CRS
 │   │   ├── derive.py               # slope, hillshade, hazard classes, cost grid
@@ -63,7 +65,9 @@ pre-mareekh/
 │       ├── lib/                    # mars.ts (distance), grid.ts (cell <-> lat/lon), router.ts
 │       └── workers/                # router.worker.ts (route finding off the main thread)
 │
-└── docs/                           # team guide, technical brief, data contract, manifest spec, notes
+└── docs/                           # team guide, technical brief, data contract, notes
+    ├── MANIFEST_SPEC.md            # what every field in a manifest means
+    └── layers/                     # one plain-English explainer per layer + preview images in img/
 ```
 
 Git does not track empty folders. Put an empty `.gitkeep` file in `data/raw/` and `data/processed/` so they exist after a clone.
@@ -91,13 +95,30 @@ npm run dev
 
 Data files are **not** stored in git. Every file we use is logged in [`data/README.md`](data/README.md) with its source, resolution, coordinate system, download date and credit.
 
-Planned sources (all public):
+**Region box:** 17.95–18.85 °N, 77.10–78.00 °E. All rasters are on the Mars 2000 sphere (radius 3,396,190 m).
 
-- **Height (DEM):** Mars 2020 CTX DEM mosaic, 20 m per pixel, USGS Astrogeology. Context: MOLA global DEM, 463 m per pixel.
-- **Photo:** CTX orthomosaic, 5 m per pixel, USGS Astropedia. Display imagery can also come from NASA's Mars Trek tile service.
-- **Minerals:** CRISM-based Jezero mineral map (Zenodo record 5575824). Partial coverage around the landing area.
-- **Heat:** THEMIS day/night infrared mosaic, 100 m per pixel.
-- **Weather:** MEDA from the Perseverance rover, via the PDS Atmospheres Node. A time series at the rover, not a map.
+Sources in use (all public, downloaded 16 Oct 2026):
+
+| Layer | File in `data/raw/` | Resolution | Coverage | Source |
+| --- | --- | --- | --- | --- |
+| Height | `M20_JezeroCrater_CTXDEM_20m.tif` | 20 m | Whole box | Mars 2020 CTX DEM mosaic, USGS Astrogeology |
+| Height (context) | `mola_463m_jezero.tif` | 463 m | Whole box (clipped) | MGS MOLA global DEM, USGS Astrogeology |
+| Photo | `M20_JezeroCrater_CTXortho_mosaic_5m.tif` | 5 m | Whole box | CTX orthomosaic, USGS (planetarymaps.usgs.gov) |
+| Minerals | `jezeroFinal.tif` + `Jezero_readme.pdf` | 36 m | Landing area only | CRISM mineral map, Zenodo record 5575824 |
+| Heat | `themis_dayir_100m_jezero.tif` | 100 m | Whole box (clipped) | THEMIS day IR controlled mosaic (Syrtis Major tile), USGS |
+| Weather | `meda/*.CSV` (+ PDS labels) | ~1 reading/s | Rover position, sols 100–102 | MEDA derived data, PDS Atmospheres Node |
+
+Display imagery can also come from NASA's Mars Trek tile service.
+
+**Getting the data:** download the shared Drive folder from the team chat into `data/raw/`, or rebuild it with `pipeline\scripts\download_jezero_data.bat` (Windows, needs OSGeo4W/QGIS for GDAL).
+
+**Known data quirks** (details in [`data/README.md`](data/README.md)):
+
+- THEMIS uses a central meridian of 180°; every other raster uses 0°. It must be reprojected before stacking.
+- The CTX photo and CRISM files store no NoData value; treat 0 (black) as NoData.
+- MEDA TIRS derived files hold infrared irradiance (W/m²), not ground temperature.
+
+Layer explainers for the judges and the team are in [`docs/layers/`](docs/layers/). The manifest format is described in [`docs/MANIFEST_SPEC.md`](docs/MANIFEST_SPEC.md).
 
 **Rule:** Mars Trek tiles are pictures, so we use them for display only. Slope and routes are computed from the original raster files.
 
@@ -115,10 +136,11 @@ Anything built before the hackathon weekend is listed here so it is clear what i
 | Date | What | Who |
 | --- | --- | --- |
 | 12 Oct 2026 | Repo, README, `.gitignore`; Python reference for slope, cost and routing (`mars_route_core.py`); technical brief | Talha |
+| 16 Oct 2026 | Data downloads and footprint check; data log (`data/README.md`); layer explainers (`docs/layers/`); manifest spec and `jezero.yaml` draft; download script (`pipeline/scripts/`) | Sadia |
 
 ## AI assistance
 
-Parts of the planning documents and the Python reference file were drafted with Claude (Anthropic) and then reviewed and tested by the team. Update this section if the 2026 rules ask for a specific format.
+Parts of the planning documents, the Python reference file, the data log, layer explainers, manifest spec and download script were drafted with Claude (Anthropic) and then reviewed and tested by the team. Update this section if the 2026 rules ask for a specific format.
 
 ## Credits
 
