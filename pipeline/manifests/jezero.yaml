@@ -1,0 +1,120 @@
+# Layer manifest for the Jezero Crater region.
+# Field meanings: docs/MANIFEST_SPEC.md
+# Draft by Sadia, 16 Oct 2026 - needs sign-off from Maheen.
+
+manifest_version: 1
+
+region:
+  id: jezero
+  name: Jezero Crater
+  body: mars
+  bbox:              # degrees, planetocentric latitude, longitude positive east
+    west: 77.10
+    south: 17.95
+    east: 78.00
+    north: 18.85
+  base_crs: "+proj=longlat +R=3396190 +no_defs"   # Mars 2000 sphere, degrees
+
+layers:
+
+  - id: ctx_dem
+    name: Height (CTX, 20 m)
+    type: raster
+    source:
+      path: data/raw/M20_JezeroCrater_CTXDEM_20m.tif
+      url: https://planetarymaps.usgs.gov/mosaic/mars2020_trn/CTX/ScienceInvestigationMaps_JPL/M20_JezeroCrater_CTXDEM_20m.tif
+    units: m
+    nodata: -3.4028235e+38
+    crs_override: null        # file header is correct (Eqc, lat_ts 18.4663, lon_0 0)
+    colormap: terrain
+    credit: "NASA/JPL/MSSS (MRO CTX); DEM mosaic by F. Calef, USGS Astrogeology"
+    caveat: "Heights tied vertically to MOLA (areoid). Stitched from several stereo DEMs, so seams and small gaps are possible."
+
+  - id: mola_dem
+    name: Height (MOLA, 463 m)
+    type: raster
+    source:
+      path: data/raw/mola_463m_jezero.tif
+      url: https://planetarymaps.usgs.gov/mosaic/Mars_MGS_MOLA_DEM_mosaic_global_463m.tif
+    units: m
+    nodata: -32768
+    crs_override: null        # Eqc, lat_ts 0, lon_0 0
+    colormap: terrain
+    credit: "NASA/GSFC MGS MOLA Science Team; mosaic by USGS Astrogeology"
+    caveat: "Coarse (463 m). Use as background or gap-filler only, not for slope."
+
+  - id: ctx_photo
+    name: Photo (CTX, 5 m)
+    type: raster
+    source:
+      path: data/raw/M20_JezeroCrater_CTXortho_mosaic_5m.tif
+      url: https://planetarymaps.usgs.gov/mosaic/mars2020_trn/CTX/ScienceInvestigationMaps_JPL/M20_JezeroCrater_CTXortho_mosaic_5m.tif
+    units: none               # image brightness 0-255
+    nodata: 0                 # not stored in file; black edges are 0
+    crs_override: null        # same projection as ctx_dem
+    colormap: greys
+    credit: "NASA/JPL/MSSS (MRO CTX); orthomosaic by USGS Astrogeology / JPL"
+    caveat: "Brightness depends on lighting at capture time, not on ground properties."
+
+  - id: crism_minerals
+    name: Minerals (CRISM)
+    type: raster_rgb
+    source:
+      path: data/raw/jezeroFinal.tif
+      url: https://zenodo.org/records/5575824
+    units: class              # RGB colour = mineral class + confidence
+    nodata: [0, 0, 0]         # black = no match / no data
+    crs_override: null        # Eqc, lat_ts 0, lon_0 0
+    colormap: embedded        # use file's own RGB; key in data/raw/Jezero_readme.pdf
+    credit: "M. Parente, Y. Itoh, A. M. Saranathan (UMass), MRO CRISM; CC BY 4.0"
+    caveat: "Covers only 18.28-18.74 N, 77.27-77.64 E (landing area). Mineral names are best matches, not confirmed identifications."
+
+  - id: themis_day_ir
+    name: Heat (THEMIS day IR, 100 m)
+    type: raster
+    source:
+      path: data/raw/themis_dayir_100m_jezero.tif
+      url: https://astrogeology.usgs.gov/search/map/mars_themis_day_ir_controlled_mosaic_syrtis_major_00n_45e_100_mpp
+    units: relative           # 1-255 brightness, not calibrated temperature
+    nodata: 0
+    crs_override: null        # header correct but lon_0 = 180 (others use 0) -> pipeline must reproject
+    colormap: inferno
+    credit: "NASA/ASU Mars Odyssey THEMIS; controlled mosaic by USGS Astrogeology"
+    caveat: "Relative brightness only. Mosaic of images taken at different times and seasons, so seams can show."
+
+  - id: meda_weather
+    name: Weather (MEDA, sols 100-102)
+    type: table
+    source:
+      path: data/raw/meda/
+      pattern: "WE__{sol:04d}___________DER_{sensor}_*.CSV"
+      sols: [100, 101, 102]
+      sensors: [PS, RHS, TIRS, WS]
+      url: https://atmos.nmsu.edu/PDS/data/PDS4/Mars2020/mars2020_meda/data_derived_env/sol_0090_0179/
+    units:
+      PRESSURE: Pa
+      LOCAL_RELATIVE_HUMIDITY: percent (assumed; not stated in label)
+      HUMIDITY_LOCAL_TEMP: K
+      VOLUME_MIXING_RATIO: ppm
+      DOWNWARD_LW_IRRADIANCE: W/m2
+      UPWARD_LW_IRRADIANCE: W/m2
+      HORIZONTAL_WIND_SPEED: m/s
+      VERTICAL_WIND_SPEED: m/s
+      WIND_DIRECTION: deg
+    nodata: 999999999         # seen in WS files; also blank cells
+    crs_override: null        # point data at the rover; no map projection
+    colormap: null
+    credit: "NASA/JPL-Caltech; CAB (CSIC-INTA) Mars 2020 MEDA team; NASA PDS Atmospheres Node"
+    caveat: "Measured at one spot (the rover), not a map. TIRS values are irradiance, not ground temperature."
+
+# Derived layer (made by the pipeline, not downloaded) - listed for the layer panel.
+derived:
+  - id: slope
+    name: Slope
+    type: raster
+    from: ctx_dem
+    method: horn
+    path: data/processed/slope.tif
+    units: deg
+    colormap: viridis
+    caveat: "Only as good as the CTX DEM; stitching seams can create false steep spots."
